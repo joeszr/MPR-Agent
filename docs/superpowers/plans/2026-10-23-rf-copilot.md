@@ -18,7 +18,11 @@
 - **保留 Redis**：负责任务队列、结果缓存（TTL 24h）和检索缓存（TTL 1h）。PostgreSQL 仍是任务状态的唯一事实来源。
 - **MCP 改为可选**（可选阶段 A）：把 4 个 Agent 工具发布成 MCP Server，复用同一套白名单、参数校验和预算。
 - 设计文档 §1、§6、§8 把 Celery 列为主线技术栈，**以本计划为准**；设计文档稍后同步。
-- 核心工时仍为 154h。两个可选阶段共 14h，只在启动条件满足时从机动时间中支出。
+- 核心工时由 154h 增至 158h（新增任务 0，4h，从机动时间支出）。两个可选阶段共 14h，只在启动条件满足时从剩余机动时间中支出。
+- **现有代码也按功能重组（新增任务 0）**：根目录脚本、`PAmodel/`、`plotfigure/` 全部搬进 `src/rf_copilot/` 下对应的功能文件夹（功放模型、指标检测、原主程序、诊断、绘图），只改 import 路径和模块文件名，不改任何数值逻辑，用搬迁前后逐位一致的对照测试证明。
+- **当前仓库状态（10/29 核对）：** Git 已初始化，共 3 个提交（最新为 `98de8b7`「添加 PAmodel 和 plotfigure 文件夹」），没有 `.gitignore`。功放模型已移入 `PAmodel/`，但根目录的 `apply_pa_model.py` 仍是 `from HZW_HB_am import ...`，导入时报 `ModuleNotFoundError`，所以**两个主程序目前无法运行**。任务 0 首先修复这一点。
+- **执行方式：Native**（用户 10/29 选定）。本轮只写计划，收到开始指令前不动代码。
+- **目录按功能分文件夹**（见「文件结构与共用约定」）：取消顶层 `scripts/`，命令入口放回各自功能包；分发器单独放在 `jobs/dispatch/`；新增 `config/`、`db/`、`evaluation/`；用量表移到 `llm/`，会话表移到 `agent/`；测试目录与源码目录一一对应；数据统一放 `data/`，文档分为 `docs/project/` 和 `docs/career/`。
 
 ## Global Constraints
 
@@ -45,25 +49,25 @@
 
 ## 执行边界、工时与环境
 
-本轮只产出计划。项目还没有 Git 仓库；开始实施时先检查工作目录、备份／提交原始代码，不能现在假定存在基线提交。
+本轮只产出计划。仓库已有 Git（见「本版修订」）；开始实施时先 `git status` 确认工作区干净，再从任务 0 开始。
 
-按一个端到端项目执行，仿真、任务、检索是相互依赖的模块，不另建三个独立产品。任务依赖顺序：1 → 2 → 3 → 4；5 → 6 → 7；4 + 7 → 8 → 9 → 10；可选 A 依赖 8，可选 B 依赖 4。阶段按下表串行推进，避免同时学习多套框架。
+按一个端到端项目执行，仿真、任务、检索是相互依赖的模块，不另建三个独立产品。任务依赖顺序：0 → 1 → 2 → 3 → 4；5 → 6 → 7；4 + 7 → 8 → 9 → 10；可选 A 依赖 8，可选 B 依赖 4。阶段按下表串行推进，避免同时学习多套框架。
 
 ## 阶段总览
 
 | 阶段 | 周次（日期） | 项目工时 | 包含任务 | 这一阶段做什么 | 阶段结束时你手上有什么 |
 |---|---|---:|---|---|---|
-| **一、仿真核心可信化** | 1—2（10/26—11/08） | 22h | 1、2 | 建 Git，固定参数档和输入／输出契约，捕获旧代码基线；把仿真改成无全局状态、可复现、有搜索上限的函数，指标带测量值和裕量 | `simulate(config)` 一次调用就能得到可解释的结果；12 例基线；`--smoke` 命令 |
+| **一、仿真核心可信化** | 1—2（10/26—11/08） | 26h | 0、1、2 | 先把现有代码按功能搬进 `src/rf_copilot/` 并修好导入；再固定参数档和输入／输出契约，捕获旧代码基线；最后把仿真改成无全局状态、可复现、有搜索上限的函数，指标带测量值和裕量 | 结构清晰、能运行的代码库；`simulate(config)` 一次调用就能得到可解释的结果；12 例基线；`--smoke` 命令 |
 | **二、后端服务化** | 3—5（11/09—11/29） | 33h | 3、4 | FastAPI 提交／查询实验；PostgreSQL 保存任务并保证幂等；Redis 队列 + 独立 worker 执行仿真；结果缓存、硬超时、Redis 丢数据后补投 | `docker compose up` 后能提交实验、拿 job_id、轮询结果；故障测试通过 |
 | **三、通信知识库 RAG** | 6—9（11/30—12/27） | 43h | 5、6、7 | 整理 30—60 个可追溯语料块；Qdrant 向量 + BM25 混合检索、版本过滤、重排、拒答；接入 LLM API，生成带引用的回答，记录 token 费用 | 问一个规范问题，得到带条款／版本引用的回答，证据不足时拒答 |
 | **四、Agent 闭环** | 10（12/28—01/03） | 12h | 8 | 用 LangGraph 编排 4 个工具：查规范、提交仿真、查结果、对比实验；会话预算持久化，防提示注入 | 一句话完成「查证据 → 提交仿真 → 等待 → 查询 → 对比」，有完整调用轨迹 |
-| **五、评测与性能** | 11—12（01/04—01/17） | 22h | 9 | 冻结 60 道题和 20 个 Agent 场景；做 dense／BM25／混合／重排四组消融；压测与故障演练 | `docs/evaluation.md`：带分子／分母的真实指标和 badcase |
+| **五、评测与性能** | 11—12（01/04—01/17） | 22h | 9 | 冻结 60 道题和 20 个 Agent 场景；做 dense／BM25／混合／重排四组消融；压测与故障演练 | `docs/project/evaluation.md`：带分子／分母的真实指标和 badcase |
 | **六、交付与面试** | 13—14（01/18—01/31） | 22h | 10 | 完成 Compose 部署、Streamlit 演示、README；写架构说明、面试问答、两版简历；录 5 分钟演示 | 能从干净环境一键启动的项目、演示视频、简历 |
-| 核心合计 | 14 周 | **154h** | 1—10 | | |
+| 核心合计 | 14 周 | **158h** | 0—10 | | |
 | *可选 A：MCP Server* | 阶段四之后 | 8h | A | 把 4 个工具发布为 MCP Server，可被 Claude Desktop／MCP Inspector 调用 | 简历可写「提供 MCP 接口」，并能现场演示 |
 | *可选 B：Celery 调度后端* | 阶段四之后（代码只依赖任务 4） | 6h | B | 新增 `CeleryDispatcher`，与 Redis 队列跑同一套分发器契约测试 | 能讲「为什么先不用 Celery、换上它改了什么」 |
 
-**可选阶段的启动条件：** 阶段四验收通过，且累计进度落后不超过 1 周。先做 A，再做 B。工时从每周 2h 的机动时间里出（14 周共 28h，A+B 共 14h）。机动时间不够时直接跳过，简历上不写。设计 §13 的扩展（GPU／C++／代理模型）排在 A、B 之后。
+**可选阶段的启动条件：** 阶段四验收通过，且累计进度落后不超过 1 周。先做 A，再做 B。工时从每周 2h 的机动时间里出（14 周共 28h，任务 0 先用掉 4h，剩 24h；A+B 共 14h）。机动时间不够时直接跳过，简历上不写。设计 §13 的扩展（GPU／C++／代理模型）排在 A、B 之后。
 
 **进度提醒：** 第 1 周从 10/26 开始，修订本计划时（10/29）阶段一尚未动工。第 1 周落下的工时先用机动时间补；补不完时，可选阶段相应减少。
 
@@ -85,24 +89,50 @@
 
 ## 文件结构与共用约定
 
-所有路径相对 `E:/PyProject/MPR_python`；不整体迁移原有脚本。每个新包创建 `__init__.py`。采用 setuptools 的 `src` 包布局，原有 `apply_pa_model`、功放模块、`matlab_builtins`、`check_*` 暂作为显式枚举的 `py-modules` 一并打包；在空目录用安装包导入测试，不能依赖偶然的 cwd。
+所有路径相对 `E:/PyProject/MPR_python`。每个包创建 `__init__.py`。采用 setuptools 的 `src` 包布局，**根目录不再放任何 `.py`**；所有导入使用绝对路径（`from rf_copilot.sim.matlab_compat import ...`），不靠 `sys.path` 拼接或 IDE 的 Sources Root。在空目录用安装包做导入测试，不能依赖偶然的 cwd。
 
-| 文件 | 职责／负责任务 |
-|---|---|
-| `src/rf_copilot/sim/{schemas,profiles,engine,cp,dft,metrics}.py` | 类型、参数档、入口、两种波形、测量；1—2 |
-| `src/rf_copilot/jobs/{models,repository,service,queue,worker,cache,reconcile}.py` | SQL 数据、事务、提交、Redis 队列、执行、缓存、补偿；3—4 |
-| `src/rf_copilot/jobs/celery_app.py` | 可选 B：Celery 分发器与任务 |
-| `src/rf_copilot/mcp_server/{__init__,__main__,server}.py` | 可选 A：MCP Server。包名不叫 `mcp`，避免遮蔽官方 SDK |
-| `src/rf_copilot/api/{app,routes}.py` | API 工厂、路由；3、8 |
-| `src/rf_copilot/rag/{schemas,ingest,retrieve,answer}.py` | 文档、入库、检索、回答；5—7 |
-| `src/rf_copilot/llm/client.py` | 供应商适配与预算；7 |
-| `src/rf_copilot/agent/{schemas,tools,workflow}.py` | 会话／工具类型、白名单、图；8 |
-| `src/rf_copilot/settings.py` | 环境设置，不含真实密钥；3 起逐步增加 |
-| `migrations/`、`alembic.ini` | schema 变更；3、8 |
-| `tests/conftest.py`、`tests/{sim,jobs,rag,agent,api,eval,delivery}/` | 各任务新增的测试与注入替身 |
-| `scripts/{capture_baseline,ingest,evaluate,benchmark}.py` | 可重跑命令；1、5、9 |
-| `eval/{questions,scenarios}.jsonl`、`data/knowledge/{manifest,chunks}.jsonl` | 评测与语料；5、9 |
-| `Dockerfile`、`compose.yaml`、`demo/app.py`、`README.md` | 部署与演示；3 起增量，10 完成 |
+**组织原则：一个大类功能 = 一个文件夹。**
+- 每个功能包内部放齐自己的数据模型、业务逻辑和命令行入口；命令统一写成 `python -m rf_copilot.<包>.<模块>`，**不设顶层 `scripts/`**。
+- 数据库表的 ORM 模型跟着所属功能走（任务表在 `jobs/`，用量表在 `llm/`，会话表在 `agent/`）；共用的数据库连接放在 `db/`。
+- `tests/` 的子目录与 `src/rf_copilot/` 一一对应，测试数据放在对应测试目录的 `fixtures/` 下。
+- 运行时数据统一放在 `data/`，文档按用途分为 `docs/project/`（项目说明）和 `docs/career/`（求职材料）。
+
+```text
+MPR_python/
+├── src/rf_copilot/
+│   ├── config/        settings.py                         环境配置，不含真实密钥（3 起逐步增加）
+│   ├── db/            base.py, session.py                 SQLAlchemy Base 与 session_factory（3）
+│   ├── sim/           schemas, profiles, engine, cp, dft, metrics, baseline   新仿真核心与旧代码基线（1—2）
+│   │   ├── matlab_compat.py                               MATLAB 内置函数的 Python 版（0）
+│   │   ├── pa/        dispatch + 各功放模型                功放模型（0）
+│   │   ├── checks/    aclr, evm_cp, evm_dft, ibe, sem_*, region_avg_*   指标检测（0；2 增加 measure 接口）
+│   │   ├── legacy/    cp_ofdm_v6, dft_ofdm_v2             原两个主程序，任务 2 后变为兼容 CLI（0、2）
+│   │   └── diagnostics/ mirror_check                      镜像对称性自检（0）
+│   ├── plots/         mpr_map, pa_huawei, pa_memory, pa_memoryless, pa_mp_k7   绘图（0）
+│   ├── jobs/          models, repository, service, worker, cache, reconcile   实验任务：持久化、执行、缓存、补偿（3—4）
+│   │   └── dispatch/  base, redis_queue, celery_dispatcher                    任务分发：协议、Redis 队列、可选 Celery（4、B）
+│   ├── api/           app.py                              FastAPI 工厂与错误映射（3、8）
+│   │   └── routes/    experiments, questions, health      按资源拆分路由（3、8）
+│   ├── rag/           schemas, ingest, retrieve, answer   知识库：入库、检索、带引用回答（5—7）
+│   ├── llm/           client, usage                       LLM 供应商适配、token／费用账本（7）
+│   ├── agent/         schemas, models, tools, workflow    Agent：会话表、工具白名单、LangGraph 图（8）
+│   ├── evaluation/    dataset, metrics, cli, benchmark    评测与压测（9）
+│   └── mcp_server/    __init__, __main__, server          可选 A：MCP Server（包名不叫 mcp，避免遮蔽官方 SDK）
+├── tests/             conftest.py + sim/ jobs/(dispatch/) api/ rag/ llm/ agent/ evaluation/ mcp_server/ delivery/
+├── data/
+│   ├── knowledge/     manifest.jsonl, chunks.jsonl, retrieval_config.json   语料与检索配置（5—6）
+│   └── eval/          questions.jsonl, scenarios.jsonl, annotations.jsonl  冻结评测集（9）
+├── migrations/ + alembic.ini                              数据库迁移（3、7、8）
+├── demo/              app.py                              Streamlit 演示，只调用 HTTP API（10）
+├── docs/
+│   ├── project/       numerical-audit, data-card, evaluation, architecture
+│   ├── career/        interview, job-tracker.csv, resume-ai, resume-backend, demo-script
+│   └── superpowers/   specs/, plans/
+├── outputs/           旧主程序和绘图脚本的运行结果（.npz／.mat／.csv／.png），已 gitignore
+└── Dockerfile, compose.yaml, pyproject.toml, uv.lock, .gitignore, .env.example, README.md
+```
+
+模块依赖只能单向：`sim.matlab_compat` ← `sim.pa`、`sim.checks` ← `sim.legacy`、`sim.diagnostics`、`plots`；`config`、`db` ← `sim` ← `jobs` ← `api`；`llm` ← `rag` ← `agent` ← `api`、`mcp_server`；`evaluation` 可以依赖任何包，但其他包不能依赖它。
 
 测试标记：`unit` 不联网；`integration` 使用独立测试数据库／Qdrant collection；`live` 才调用付费 API／真实模型；`slow` 包括硬超时测试。不得清空开发数据库。pytest 默认 `-m 'not live and not slow'`，长时限验证单列。
 
@@ -110,15 +140,70 @@
 
 ---
 
-# 阶段一：仿真核心可信化（第 1—2 周，22h）
+# 阶段一：仿真核心可信化（第 1—2 周，26h）
 
-**目标：** 先让「算出来的数」可信、可复现。后面所有服务、RAG 和 Agent 都建立在这里的结果之上。
-**做什么：** 任务 1 固定输入／输出契约，记录旧代码基线；任务 2 把仿真提取成纯函数，修掉功率沿用、搜索无上限、IBE 冒充通过等口径问题。
-**阶段验收：** `python -m pytest tests/sim -v` 全部 PASS；`python CP_ofdm_mainV6.py --smoke --seed 42` 输出带功率口径、指标测量值、裕量和 `not_evaluated` 标记的结果；`docs/numerical-audit.md` 记录每个已知问题的处理方式。
+**目标：** 先让代码结构清楚、能运行，再让「算出来的数」可信、可复现。后面所有服务、RAG 和 Agent 都建立在这里的结果之上。
+**做什么：** 任务 0 把现有代码按功能搬进 `src/rf_copilot/`，修好导入，用对照测试证明数值不变；任务 1 固定输入／输出契约，记录旧代码基线；任务 2 把仿真提取成纯函数，修掉功率沿用、搜索无上限、IBE 冒充通过等口径问题。
+**阶段验收：** 根目录没有 `.py` 文件；`python -m pytest tests/sim -v` 全部 PASS（包括搬迁对照测试）；`python -m rf_copilot.sim.legacy.cp_ofdm_v6 --smoke --seed 42` 输出带功率口径、指标测量值、裕量和 `not_evaluated` 标记的结果；`docs/project/numerical-audit.md` 记录每个已知问题的处理方式。
+
+## Task 0：按功能重组现有代码（4h）
+
+**目标：** 只搬家、不装修。把根目录脚本、`PAmodel/`、`plotfigure/` 搬进对应的功能文件夹，修复当前断掉的导入。**不改任何数值逻辑、函数名或函数签名**；用搬迁前后逐位一致的指纹对照来证明。
+
+**搬迁对照表**（用 `git mv`，保留文件历史；模块文件名改为小写，函数名保持原样，如 `check_ACLR`、`pa_model_mp_K7` 不变）：
+
+| 现在的位置 | 搬到 `src/rf_copilot/` 下 |
+|---|---|
+| `matlab_builtins.py` | `sim/matlab_compat.py` |
+| `apply_pa_model.py` | `sim/pa/dispatch.py`（`sim/pa/__init__.py` 导出 `apply_pa_model`） |
+| `PAmodel/HZW_HB_am.py`、`PAmodel/HZW_HB_pm.py` | `sim/pa/hzw_hb_am.py`、`sim/pa/hzw_hb_pm.py` |
+| `PAmodel/pa_GaAs_2GHz.py` | `sim/pa/gaas_2ghz.py` |
+| `PAmodel/pa_model_memory_38803.py`、`PAmodel/pa_model_memoryless_38803.py` | `sim/pa/memory_38803.py`、`sim/pa/memoryless_38803.py` |
+| `PAmodel/pa_model_memoryless.py`、`PAmodel/pa_model_mp.py`、`PAmodel/pa_model_mp_K7.py` | `sim/pa/memoryless.py`、`sim/pa/mp.py`、`sim/pa/mp_k7.py` |
+| `check_ACLR.py`、`check_IBE.py` | `sim/checks/aclr.py`、`sim/checks/ibe.py` |
+| `check_EVM_CP.py`、`check_EVM_DFT.py` | `sim/checks/evm_cp.py`、`sim/checks/evm_dft.py` |
+| `check_SEM_FR1.py`、`check_SEM_FR2.py`、`check_SEM_FR2_EESS.py` | `sim/checks/sem_fr1.py`、`sim/checks/sem_fr2.py`、`sim/checks/sem_fr2_eess.py` |
+| `check_region_avg_left.py`、`check_region_avg_right.py` | `sim/checks/region_avg_left.py`、`sim/checks/region_avg_right.py` |
+| `CP_ofdm_mainV6.py`、`DFT_ofdm_mainV2.py` | `sim/legacy/cp_ofdm_v6.py`、`sim/legacy/dft_ofdm_v2.py` |
+| `mirror_check.py` | `sim/diagnostics/mirror_check.py` |
+| `plotfigure/figure_plot.py` | `plots/mpr_map.py` |
+| `plotfigure/plotPA_HUAWEI.py`、`plotfigure/plotPA_memory.py` | `plots/pa_huawei.py`、`plots/pa_memory.py` |
+| `plotfigure/plotPA_memoryless.py`、`plotfigure/plotPA_mp_K7.py` | `plots/pa_memoryless.py`、`plots/pa_mp_k7.py` |
+
+**Files:** 新增 `.gitignore`、最小 `pyproject.toml`、上表各目录的 `__init__.py`、`tests/sim/fixtures/reorg_fingerprint.py`、`tests/sim/fixtures/reorg_before.json`、`tests/sim/test_reorg_equivalence.py`；按上表移动并修改所有内部 import；删除 `PAmodel/`、`plotfigure/`（`git mv` 后其中只剩未跟踪的 `__pycache__`，`rmdir` 会失败，需整个删除）。
+
+**Interfaces:**
+
+- Produces（任务 1、2 依赖）：`rf_copilot.sim.pa.apply_pa_model(signal_in, k, PA_MODEL_TYPE)`；`rf_copilot.sim.checks.<模块>.<原函数名>`；`rf_copilot.sim.legacy.cp_ofdm_v6.simulate_config(lcrb, rbstart, rbend, rng)` 与 `rf_copilot.sim.legacy.dft_ofdm_v2.simulate_config(lcrb, rbstart, rbend, rng)`，模块全局参数（`MONTE_CARLO`、`PA_MODEL_TYPE` 等）名称不变；`rf_copilot.sim.matlab_compat`。
+- 运行方式统一为 `python -m rf_copilot.<包>.<模块>`；旧主程序和绘图脚本的输出文件改写到 `outputs/`（不存在时自动创建），文件名不变。
+- `reorg_fingerprint.digest(a: np.ndarray) -> str`：dtype + shape + 原始字节的 SHA-256，摘要相同即逐位相同；fixture 只存摘要（约 4KB），不存数组（`plot_pa_memory` 有 34 万点，存数组约 22MB）。
+- `reorg_fingerprint.compute(layout: Literal['old','new'], root: Path | None = None) -> dict[str, np.ndarray]`：`old` 把 `root`、`root/PAmodel`、`root/plotfigure` 依次插入 `sys.path` 后按旧的平铺模块名导入（对当前 `98de8b7` 的布局有效，不需要回退旧提交），`new` 从 `rf_copilot` 导入，两种布局计算同一组量：
+  - `cp_a`、`cp_b`：CP 主模块设 `MONTE_CARLO=1` 后，`simulate_config(1, 0, 0, RandomState(42))` 与 `simulate_config(12, 120, 131, RandomState(42))` 的返回元组；
+  - `dft_a`：DFT 主模块设 `MONTE_CARLO=1` 后，`simulate_config(12, 0, 11, RandomState(42))` 的返回元组；
+  - `pa_<类型>`：对 `RandomState(0)` 生成、按最大幅度归一化的 1024×1 复信号，以 `k=-10` 调用 `apply_pa_model`，类型取 `HZW_HB`、`MP1`、`MP`、`MEMORYLESS`、`MEMORY` 中实际有实现的（抛 `NotImplementedError` 的跳过并记录）；
+  - `plot_<名称>`：4 个功放绘图模块 `compute()` 的返回值（元组逐项展开为 `plot_<名称>_<序号>`）；`mpr_map`：`build_map(np.arange(55.0), 10)` 的返回值。
+
+- [ ] **0.1 仓库卫生。** 新增 `.gitignore`：`__pycache__/`、`*.pyc`、`.idea/`、`.venv/`、`.env`、`outputs/`、`*.npz`、`*.mat`。若 `__pycache__/`、`.idea/` 已被跟踪，执行 `git rm -r --cached __pycache__ .idea`（文件仍留在本地）。提交 `chore: ignore caches, IDE files and run outputs`。
+- [ ] **0.2 写指纹脚本。** 在任何 `git mv` 之前，写好 `tests/sim/fixtures/reorg_fingerprint.py`，入口带 `--layout`、`--root`、`--out` 参数。
+- [ ] **0.3 生成搬迁前指纹。** 仍在搬迁前，运行 `python tests/sim/fixtures/reorg_fingerprint.py --layout old --root . --out tests/sim/fixtures/reorg_before.json`。预期打印「共 40 项」（演练值，以实际输出为准），并打印跳过的功放类型。把当前提交号和跳过列表记入 `docs/project/numerical-audit.md`。提交指纹脚本和 JSON：`test: capture pre-reorganization fingerprint`。
+- [ ] **0.4 写对照测试。**
+
+```python
+def test_reorg_is_bit_identical():
+    before = json.loads((FIXTURES / 'reorg_before.json').read_text(encoding='utf-8'))
+    after = {k: fp.digest(v) for k, v in fp.compute('new').items()}
+    assert set(after) == set(before)
+    assert sorted(k for k in before if after[k] != before[k]) == []
+```
+
+另加 `test_no_python_files_at_repo_root`：仓库根目录 `glob('*.py')` 为空。
+- [ ] **0.5 执行红灯。** `python -m pytest tests/sim/test_reorg_equivalence.py -v`；预期 FAIL，原因是 `rf_copilot` 无法导入、根目录仍有 `.py`。
+- [ ] **0.6 搬迁并修导入。** 新建最小 `pyproject.toml`（setuptools、`src` 布局、包 `rf_copilot`、依赖 numpy 与 scipy、可选组 `plots = [matplotlib]`），`pip install -e .`。按对照表 `git mv`；把所有平铺导入改成绝对导入，例如 `from matlab_builtins import polyval` → `from rf_copilot.sim.matlab_compat import polyval`。`sim/pa/__init__.py` 只写 `from .dispatch import apply_pa_model`。各脚本的 `if __name__ == '__main__':` 保持原样，只把输出路径改到 `outputs/`。
+- [ ] **0.7 验证并提交。** `python -m pytest tests/sim/test_reorg_equivalence.py -v` PASS；`python -c "import rf_copilot.sim.legacy.cp_ofdm_v6, rf_copilot.sim.legacy.dft_ofdm_v2, rf_copilot.sim.diagnostics.mirror_check, rf_copilot.plots.mpr_map"` 无报错，且不会触发全量扫描。不要直接运行旧主程序的 main（默认全量扫描约 21 小时）。在 PyCharm 中把 `src` 标为 Sources Root（只是方便跳转，运行不依赖它）。提交 `refactor: organize legacy simulation code into rf_copilot packages`。
 
 ## Task 1：建立固定配置、依赖与小样本基线（10h）
 
-**Files:** 新增 `pyproject.toml`、`uv.lock`、`.gitignore`、`src/rf_copilot/sim/schemas.py`、`src/rf_copilot/sim/profiles.py`、`scripts/capture_baseline.py`、`tests/conftest.py`、`tests/sim/test_contract.py`、`tests/fixtures/sim_cases.json`、`docs/numerical-audit.md`。
+**Files:** 新增 `uv.lock`、`src/rf_copilot/sim/schemas.py`、`src/rf_copilot/sim/profiles.py`、`src/rf_copilot/sim/baseline.py`、`tests/conftest.py`、`tests/sim/test_contract.py`、`tests/sim/fixtures/sim_cases.json`；修改任务 0 建立的 `pyproject.toml`、`.gitignore`（补充模型目录与原始受限资料）、`docs/project/numerical-audit.md`。
 
 **Interfaces:**
 
@@ -129,7 +214,7 @@
 - `schemas.Metric(value: float|None, unit: str, limit: float|None, margin: float|None, status: str)`；检查状态用设计中的五值枚举。`TrialResult` 保存 trial_index、seed、status、power、drive、metrics、reason；`SimResult` 保存 config、status、trials、output_power_db_ref、mpr_db、reason、elapsed_s。非有限数映射 null 并记录原因，不默默变成成功。
 - `tests/conftest.py` 的 `make_config(**overrides) -> SimConfig` 默认 cp、RB=(0,1)、256QAM、seed=42、trials=1、上述固定档、engine_version=`engine-v1`；只用于测试。
 
-- [ ] **1.1 建立版本基线。** 确认无 Git 后执行 `git init`；`.gitignore` 排除 `.env`、虚拟环境、缓存、模型、运行输出和原始受限资料。明确选择原有 `.py` 与设计文档提交，记录 commit ID 到 numerical-audit；不改原始数值实现。
+- [ ] **1.1 记录版本基线。** 确认任务 0 的提交之后工作区干净（`git status`）；把该提交号作为「旧实现基线」记入 numerical-audit。`.gitignore` 补充模型目录和原始受限资料。不改原始数值实现。
 - [ ] **1.2 写契约测试。** 在 `test_contract.py` 中包含下列断言，并参数化越界 rb_start=273、rb_count=0、trials=4、未知模型和多余字段：
 
 ```python
@@ -142,13 +227,13 @@ def test_profile_and_budget(make_config):
 ```
 
 - [ ] **1.3 执行红灯。** `python -m pytest tests/sim/test_contract.py -v`；预期缺模块或契约断言失败，记录实际原因。
-- [ ] **1.4 实现类型与打包。** schemas/profiles 按上述契约实现；pyproject 定义依赖与 pytest 标记，生成锁文件。先检查 Python／uv 是否可用，缺少时再安装。添加编辑器外导入检查。
-- [ ] **1.5 捕获旧基线。** `capture_baseline.py` 在独立子进程按案例设置旧模块参数后调用 `simulate_config`，每例 120 秒外部 watchdog，不执行默认 main。12 例固定为：CP 的 (0,1)、(272,1)、(120,12)、(0,24)、(249,24)、(100,50)；非法越界；DFT (0,7) 跳过；一次成功后无有效点的替身；全部检查通过导致搜索不收敛的替身；固定点 EVM 恰好阈值；CP IBE 未评估。真实案例 seed=42、trials=1。基线输出存 `tests/fixtures/legacy_baseline.json`，超时／异常原样记录。
-- [ ] **1.6 验证并提交。** 重跑契约测试应 PASS；`python scripts/capture_baseline.py --cases tests/fixtures/sim_cases.json --timeout 120` 应生成 12 条带状态记录，不要求旧代码全部正确。`git add` 仅本任务文件；`git commit -m "test: establish RF simulation contracts and baseline"`。
+- [ ] **1.4 实现类型与打包。** schemas/profiles 按上述契约实现；在任务 0 的 pyproject 上补充 Pydantic 等依赖、开发依赖组与 pytest 标记，生成锁文件。先检查 Python／uv 是否可用，缺少时再安装。添加编辑器外导入检查。
+- [ ] **1.5 捕获旧基线。** `sim/baseline.py` 在独立子进程按案例设置旧模块参数后调用 `rf_copilot.sim.legacy.cp_ofdm_v6.simulate_config` 或 `rf_copilot.sim.legacy.dft_ofdm_v2.simulate_config`，每例 120 秒外部 watchdog，不执行默认 main。12 例固定为：CP 的 (0,1)、(272,1)、(120,12)、(0,24)、(249,24)、(100,50)；非法越界；DFT (0,7) 跳过；一次成功后无有效点的替身；全部检查通过导致搜索不收敛的替身；固定点 EVM 恰好阈值；CP IBE 未评估。真实案例 seed=42、trials=1。基线输出存 `tests/sim/fixtures/legacy_baseline.json`，超时／异常原样记录。
+- [ ] **1.6 验证并提交。** 重跑契约测试应 PASS；`python -m rf_copilot.sim.baseline --cases tests/sim/fixtures/sim_cases.json --timeout 120` 应生成 12 条带状态记录，不要求旧代码全部正确。`git add` 仅本任务文件；`git commit -m "test: establish RF simulation contracts and baseline"`。
 
 ## Task 2：提取可解释、有界的仿真核心（12h）
 
-**Files:** 新增 `sim/engine.py`、`sim/cp.py`、`sim/dft.py`、`sim/metrics.py`（均在 `src/rf_copilot/` 下）、`tests/sim/test_engine.py`、`tests/sim/test_metrics.py`；修改 `CP_ofdm_mainV6.py:91`、`DFT_ofdm_mainV2.py:99` 的计算入口与 CLI、`check_EVM_CP.py`、`check_EVM_DFT.py`、`check_ACLR.py`；更新 numerical-audit。
+**Files:** 新增 `sim/engine.py`、`sim/cp.py`、`sim/dft.py`、`sim/metrics.py`（均在 `src/rf_copilot/` 下）、`tests/sim/test_engine.py`、`tests/sim/test_metrics.py`；修改 `sim/legacy/cp_ofdm_v6.py`、`sim/legacy/dft_ofdm_v2.py` 的 `simulate_config` 入口与 CLI，以及 `sim/checks/evm_cp.py`、`sim/checks/evm_dft.py`、`sim/checks/aclr.py`；更新 numerical-audit。
 
 **Interfaces:**
 
@@ -174,7 +259,7 @@ def test_metrics_have_physical_meaning():
 - [ ] **2.3 提取测量。** 在旧 check 文件中新增同参数的 measure 接口返回数值，保留 check 的 0/1 包装；不增加噪声、不改变均衡算法。新 metrics 负责状态、margin 与非有限值。保留 SEM 布尔值，CP IBE 固定 not_evaluated。
 - [ ] **2.4 提取计算。** 把两种波形放入 cp/dft，engine 分发；每次试验重新初始化状态，seed+i 构造独立 RNG，记录派生 seed。保留已有 FFT/Welch 路径及 DFT 跳过规则。计算 trial 全成功时才汇总线性功率平均后转 dB。
 - [ ] **2.5 接入有界搜索与兼容 CLI。** CP 起点 -15、DFT -25，最大驱动 10、最多 200 次 evaluate；DFT 随机重采样上限 100 次。旧 CLI 保留全量扫描能力但增加 `--smoke`，打印真实功率名称和未评估指标；兼容输出旧字段时附 deprecated 说明。
-- [ ] **2.6 验证并提交。** `python -m pytest tests/sim -v`；`python CP_ofdm_mainV6.py --smoke --seed 42`；`python DFT_ofdm_mainV2.py --smoke --seed 42`。正常基线容差 atol=1e-6/rtol=1e-5；seed+i 导致多试验旧随机流不同，逐试验重放对照而非强求总数相同。修复场景以独立断言为准。暂存本任务文件，提交 `refactor: expose bounded reproducible RF simulations`。
+- [ ] **2.6 验证并提交。** `python -m pytest tests/sim -v`；`python -m rf_copilot.sim.legacy.cp_ofdm_v6 --smoke --seed 42`；`python -m rf_copilot.sim.legacy.dft_ofdm_v2 --smoke --seed 42`。任务 0 的对照测试在本任务后会失败是预期的（数值口径被有意修正）：把它标记为 `legacy_reorg` 并在本任务中改为只比较 `pa_*`、`plot_*`、`mpr_map` 这些未被修改的键，`cp_*`、`dft_*` 的对照交给任务 1 的基线。正常基线容差 atol=1e-6/rtol=1e-5；seed+i 导致多试验旧随机流不同，逐试验重放对照而非强求总数相同。修复场景以独立断言为准。暂存本任务文件，提交 `refactor: expose bounded reproducible RF simulations`。
 
 ---
 
@@ -186,13 +271,15 @@ def test_metrics_have_physical_meaning():
 
 ## Task 3：实验持久化与 HTTP 接口（22h）
 
-**Files:** 新增 `jobs/{models,repository,service}.py`、`api/{app,routes}.py`、`settings.py`、`migrations/env.py`、`migrations/versions/001_jobs.py`、`alembic.ini`、`.env.example`、初版 `compose.yaml`、`tests/jobs/test_repository.py`、`tests/api/test_experiments.py`（模块目录沿文件地图）；更新依赖锁。
+**Files:** 新增 `config/settings.py`、`db/{base,session}.py`、`jobs/{models,repository,service}.py`、`jobs/dispatch/base.py`、`api/app.py`、`api/routes/{experiments,health}.py`、`migrations/env.py`（导入各功能包的 models 以注册表结构）、`migrations/versions/001_jobs.py`、`alembic.ini`、`.env.example`、初版 `compose.yaml`、`tests/jobs/test_repository.py`、`tests/api/test_experiments.py`（模块目录沿文件地图）；更新依赖锁。
 
 **Interfaces:**
 
 - `models.JobView`：id UUID、status、request、result `list[SimResult]|None`、dispatch_pending bool、error_code、created_at、started_at、finished_at、request_hash、attempt_token UUID|None。
 - `repository.JobRepository(session_factory)`：`get_or_create(request: ExperimentRequest) -> tuple[JobView,bool]`、`get(job_id: UUID) -> JobView|None`、`claim(job_id: UUID, token: UUID, now: datetime) -> bool`、`finish(job_id: UUID, token: UUID, status: str, result: list[SimResult]|None, error: str|None) -> bool`。
-- `service.request_key(request: ExperimentRequest) -> str`：规范化 JSON + SHA256；包含配置顺序、seed、所有 profile/engine 版本，不包含时间戳。`ExperimentService(repo, dispatcher)` 的 `submit(request) -> JobView`、`get(job_id) -> JobView|None`；dispatcher 接口 `enqueue(job_id: UUID) -> None`，本任务用测试替身。
+- `service.request_key(request: ExperimentRequest) -> str`：规范化 JSON + SHA256；包含配置顺序、seed、所有 profile/engine 版本，不包含时间戳。`ExperimentService(repo, dispatcher: Dispatcher)` 的 `submit(request) -> JobView`、`get(job_id) -> JobView|None`。
+- `jobs/dispatch/base.Dispatcher`：Protocol，只有 `enqueue(job_id: UUID) -> None`。本任务用测试替身实现，任务 4 和可选 B 提供真实实现。
+- `db.session.make_session_factory(url: str) -> sessionmaker`；`db.base.Base` 是所有功能包 ORM 模型的共同基类。
 - `app.create_app(service: ExperimentService) -> FastAPI`；POST `/v1/experiments` → 202；GET `/v1/experiments/{id}` → 200 或 404；非法配置／不支持的 dft → 422。`/health` 只检查进程，`/ready` 检查必要依赖。
 
 - [ ] **3.1 写 API／事务测试。** 真 PostgreSQL 集成 fixture 用独立测试数据库，测试完成回滚／清理自己的表数据；以下并发测试不能用 SQLite 代替：
@@ -218,12 +305,12 @@ def test_idempotency_and_version(repo, make_request):
 
 ## Task 4：Redis 队列、独立 worker、缓存与终态恢复（11h）
 
-**Files:** 新增 `jobs/{queue,worker,cache,reconcile}.py`、初版 `Dockerfile`、`tests/jobs/test_queue.py`、`tests/jobs/test_worker.py`、`tests/jobs/test_cache.py`、`tests/jobs/test_reconcile.py`、`tests/jobs/dispatcher_contract.py`；修改 service、repository、settings、compose 与依赖锁。
+**Files:** 新增 `jobs/dispatch/redis_queue.py`、`jobs/{worker,cache,reconcile}.py`、初版 `Dockerfile`、`tests/jobs/dispatch/test_redis_queue.py`、`tests/jobs/test_worker.py`、`tests/jobs/test_cache.py`、`tests/jobs/test_reconcile.py`、`tests/jobs/dispatch/contract.py`；修改 service、repository、settings、compose 与依赖锁。
 
 **Interfaces:**
 
-- Consumes：任务 3 的 `JobRepository.get/claim/finish`、`ExperimentService(repo, dispatcher)` 与 dispatcher 协议 `enqueue(job_id: UUID) -> None`；任务 2 的 `engine.simulate(config) -> SimResult`。
-- `queue.RedisJobQueue(redis_client, prefix: str = 'rf:queue')`：
+- Consumes：任务 3 的 `JobRepository.get/claim/finish`、`ExperimentService(repo, dispatcher)` 与 `jobs/dispatch/base.Dispatcher` 协议；任务 2 的 `engine.simulate(config) -> SimResult`。
+- `dispatch.redis_queue.RedisJobQueue(redis_client, prefix: str = 'rf:queue')`：
   - `enqueue(job_id: UUID) -> None`：`LPUSH {prefix}:jobs`，满足 dispatcher 协议；
   - `reserve(timeout_s: int) -> UUID | None`：`BLMOVE {prefix}:jobs {prefix}:processing RIGHT LEFT`；
   - `ack(job_id: UUID) -> None`：从 `{prefix}:processing` 中 `LREM`；
@@ -235,9 +322,9 @@ def test_idempotency_and_version(repo, make_request):
 - `cache.ResultCache(redis_client, prefix: str = 'rf:result')`：`get(key: str) -> list[SimResult]|None`、`put(key: str, result: list[SimResult]) -> None`；TTL=86400。
 - `repository.queued(limit: int) -> list[JobView]`、`mark_dispatched(job_id: UUID) -> None`（置 dispatch_pending=false）、`expire_running(before: datetime) -> int`；只操作满足状态的记录。
 - `reconcile.reconcile(queue: RedisJobQueue, repo: JobRepository, now: datetime) -> dict[str,int]`，返回键 `requeued`、`timed_out`：对 queued 且 `dispatch_pending=true` 或 `not queue.contains(id)` 的任务重新入队并 mark_dispatched；running 且 `started_at < now - 150s` 的任务标 timed_out（worker 自身 120s 硬超时，150s 只兜底 worker 崩溃）。`python -m rf_copilot.jobs.reconcile --interval 15`。初版终态不自动重跑。
-- `settings.dispatcher: Literal['redis','celery'] = 'redis'`；核心只实现 `redis`。
+- `config.settings.dispatcher: Literal['redis','celery'] = 'redis'`；核心只实现 `redis`。
 
-- [ ] **4.1 写分发器契约测试。** `tests/jobs/dispatcher_contract.py` 定义可参数化的契约，任务 4 用 `redis` 运行，可选 B 用 `celery` 复用。测试 Redis 使用独立前缀 `rf-test:{uuid}:queue`，结束时删除自己的 key。fixture `run_worker_once(times: int) -> list[str]` 在 `conftest.py` 中按 dispatcher 类型实现：redis 模式下执行 `times` 次 `reserve → run_job → ack` 并返回每次的状态；celery 模式下等待 `times` 次任务执行完成，再从 worker 日志的结构化记录读取状态。
+- [ ] **4.1 写分发器契约测试。** `tests/jobs/dispatch/contract.py` 定义可参数化的契约，任务 4 用 `redis` 运行，可选 B 用 `celery` 复用。测试 Redis 使用独立前缀 `rf-test:{uuid}:queue`，结束时删除自己的 key。fixture `run_worker_once(times: int) -> list[str]` 在 `conftest.py` 中按 dispatcher 类型实现：redis 模式下执行 `times` 次 `reserve → run_job → ack` 并返回每次的状态；celery 模式下等待 `times` 次任务执行完成，再从 worker 日志的结构化记录读取状态。
 
 ```python
 def test_duplicate_delivery_runs_once(dispatcher, repo, run_worker_once, make_request):
@@ -250,11 +337,11 @@ def test_duplicate_delivery_runs_once(dispatcher, repo, run_worker_once, make_re
 ```
 
 - [ ] **4.2 写队列、worker、缓存与补偿测试。**
-  - `test_queue.py`：enqueue → reserve 得到同一 id，且在 processing 中；ack 后两个列表都没有；`recover_processing` 把遗留项移回 jobs 并返回 1。
+  - `dispatch/test_redis_queue.py`：enqueue → reserve 得到同一 id，且在 processing 中；ack 后两个列表都没有；`recover_processing` 把遗留项移回 jobs 并返回 1。
   - `test_worker.py`：`run_with_timeout(time.sleep, 5, timeout_s=1)` 返回 `'timeout'`，且子进程 `is_alive()` 为 False；替身仿真抛异常时任务 failed 且保存原因；超时扫描之后迟到的 finish 返回 False。
   - `test_reconcile.py`：enqueue 抛 `ConnectionError` 时 dispatch_pending=true，接口仍返回 queued；Redis 恢复后 reconcile 返回 `requeued == 1`，worker 跑完 succeeded。enqueue 之后删除队列 key（模拟 Redis 丢数据），reconcile 返回 `requeued == 1`。running 的 `started_at` 设为 151 秒前，reconcile 返回 `timed_out == 1`。
   - `test_cache.py`：`ttl in 1..86400`；failed 不缓存；删除缓存后服务从数据库得到同样结果；Redis 不可用时 GET 回源 PostgreSQL 仍返回 200。
-- [ ] **4.3 执行红灯。** `python -m pytest tests/jobs/test_queue.py tests/jobs/test_worker.py tests/jobs/test_cache.py tests/jobs/test_reconcile.py -v`；预期新模块缺失。
+- [ ] **4.3 执行红灯。** `python -m pytest tests/jobs/dispatch/test_redis_queue.py tests/jobs/test_worker.py tests/jobs/test_cache.py tests/jobs/test_reconcile.py -v`；预期新模块缺失。
 - [ ] **4.4 实现队列与 worker。** 按上面的接口实现。claim 后顺序处理最多 2 个配置，整项任务共用 120 秒预算；任何 SimResult error 都使任务 failed，并保留已取得的结果和原因。新建 Linux Python 3.11 镜像，安装锁定依赖和本项目，Compose 的 worker 与 scheduler 共用。
 - [ ] **4.5 实现缓存和补偿。** 写缓存失败不撤回数据库成功。Compose 中 Redis 设置 `maxmemory` 与 `noeviction`；容量满导致的写入错误按入队失败处理（dispatch_pending=true）。scheduler 容器运行 reconcile。补投可能造成重复，由 claim 拒绝重复执行。
 - [ ] **4.6 验证并提交。** `docker compose up -d postgres redis worker scheduler`；`python -m pytest tests/jobs -v` PASS。再单列 `python -m pytest tests/jobs/test_worker.py -m slow -v`：使用真实参数档、`time_limit_s=120` 的阻塞替身被终止，任务为 timed_out。提交 `feat: run recoverable jobs on a Redis queue with caching`。
@@ -269,7 +356,7 @@ def test_duplicate_delivery_runs_once(dispatcher, repo, run_worker_once, make_re
 
 ## Task 5：建立可追溯语料与向量索引（12h）
 
-**Files:** 新增 `rag/schemas.py`、`rag/ingest.py`、`scripts/ingest.py`、`data/knowledge/manifest.jsonl`、`data/knowledge/chunks.jsonl`、`docs/data-card.md`、`tests/rag/test_ingest.py`；增加 Qdrant 服务与模型可选依赖。
+**Files:** 新增 `rag/schemas.py`、`rag/ingest.py`（含 `python -m rf_copilot.rag.ingest` 入口）、`data/knowledge/manifest.jsonl`、`data/knowledge/chunks.jsonl`、`docs/project/data-card.md`、`tests/rag/test_ingest.py`；增加 Qdrant 服务与模型可选依赖。
 
 **Interfaces:**
 
@@ -282,7 +369,7 @@ def test_duplicate_delivery_runs_once(dispatcher, repo, run_worker_once, make_re
 - [ ] **5.2 执行红灯。** `python -m pytest tests/rag/test_ingest.py -v`；预期 ingest 缺失。
 - [ ] **5.3 准备语料。** 人工校对 30—60 块，表格保留标题、单位和脚注；标准原文可用时才标 standard。若官方资源仍不可取，先以项目说明／实验阈值完成链路，回答明确“无规范证据”，不能编造标准块或题目答案。data-card 记录来源、许可、获取日期、文件 hash 与核对人。
 - [ ] **5.4 实现索引。** BGE-M3 初选，revision 和维度由实际模型卡／输出核对并写 manifest；Qdrant 元数据使用完整字段；本地 BM25 原始文本索引与 Qdrant 使用同一 corpus_hash。中文术语使用可固定版本的分词器，保护 ACLR、EVM、38.101-1 等 token；分词器版本进入索引身份。
-- [ ] **5.5 验证并提交。** `python scripts/ingest.py --manifest data/knowledge/manifest.jsonl --chunks data/knowledge/chunks.jsonl` 输出有效块数；重复执行数量不变，单元测试 PASS。提交代码与允许公开的 metadata／示例，受限原文留本机，提交 `feat: index provenance-aware RF knowledge`。
+- [ ] **5.5 验证并提交。** `python -m rf_copilot.rag.ingest --manifest data/knowledge/manifest.jsonl --chunks data/knowledge/chunks.jsonl` 输出有效块数；重复执行数量不变，单元测试 PASS。提交代码与允许公开的 metadata／示例，受限原文留本机，提交 `feat: index provenance-aware RF knowledge`。
 
 ## Task 6：版本过滤、混合检索、重排与拒答信号（21h）
 
@@ -310,7 +397,7 @@ def test_rrf_uses_both_rankings(hit_a, hit_b):
 
 ## Task 7：LLM 适配、证据回答与费用记录（10h）
 
-**Files:** 新增 `llm/client.py`、`rag/answer.py`、`tests/rag/test_answer.py`、`tests/llm/test_client.py`；修改 settings、依赖锁。
+**Files:** 新增 `llm/{client,usage}.py`、`rag/answer.py`、`migrations/versions/002_usage.py`、`tests/rag/test_answer.py`、`tests/llm/test_client.py`、`tests/llm/test_usage.py`；修改 `config/settings.py`、依赖锁。
 
 **Interfaces:**
 
@@ -320,7 +407,7 @@ def test_rrf_uses_both_rankings(hit_a, hit_b):
 
 - [ ] **7.1 写边界测试。** ScriptedLLM 替身按给定序列返回 LLMReply 或错误。无证据调用数=0；伪造 chunk_id 返回 no_evidence；只有 project_note 时不能出现“已符合标准”的成功模板。模拟 429 后成功调用数=2，连续 429 调用数仍=2，401 调用数=1。
 - [ ] **7.2 执行红灯。** `python -m pytest tests/rag/test_answer.py tests/llm/test_client.py -v`。
-- [ ] **7.3 实现客户端与预算账本。** 记录模型名／revision（供应商未提供时记 unknown）、token、供应商价格配置和请求状态。新增 jobs models 的 usage 表及 `migrations/versions/002_usage.py`；每次调用前按 max_tokens 预留预算，返回后结算；超预算拒绝外部请求。未知单价要求先配置，不以 0 计价。
+- [ ] **7.3 实现客户端与预算账本。** 记录模型名／revision（供应商未提供时记 unknown）、token、供应商价格配置和请求状态。用量表的 ORM 模型和预留／结算逻辑放在 `llm/usage.py`，迁移为 `migrations/versions/002_usage.py`；每次调用前按 max_tokens 预留预算，返回后结算；超预算拒绝外部请求。未知单价要求先配置，不以 0 计价。
 - [ ] **7.4 实现回答。** 引用存在性可程序验证，事实是否受支持还需任务 9 的人工标注。检索文本只作为数据段，不混入 system 指令。实现固定回答结构：结论、适用条件、证据、局限。
 - [ ] **7.5 验证并提交。** 上述测试 PASS；另选 3 个开发题做付费 live 调用，保存脱敏响应与费用，不使用冻结测试题调 prompt。提交 `feat: generate attributable answers with bounded LLM calls`。
 
@@ -334,7 +421,7 @@ def test_rrf_uses_both_rankings(hit_a, hit_b):
 
 ## Task 8：四工具 Agent 与跨请求预算（12h）
 
-**Files:** 新增 `agent/{schemas,tools,workflow}.py`、`migrations/versions/003_sessions.py`、`tests/agent/test_workflow.py`；修改 jobs/models、API app/routes、settings。
+**Files:** 新增 `agent/{schemas,models,tools,workflow}.py`（Session、ToolInvocation 两张表的 ORM 模型在 `agent/models.py`）、`api/routes/questions.py`、`migrations/versions/003_sessions.py`、`tests/agent/test_workflow.py`；修改 `api/app.py`、`config/settings.py`。
 
 **Interfaces:**
 
@@ -357,17 +444,17 @@ def test_rrf_uses_both_rankings(hit_a, hit_b):
 
 **目标：** 用数据证明项目做过、做到了什么程度。简历上的每个数字都来自这一阶段。
 **做什么：** 任务 9 冻结题集和场景，跑四组检索消融、Agent 端到端场景、并发压测，以及 Redis／worker 故障演练。
-**阶段验收：** `docs/evaluation.md` 列出可重放命令、数据 hash、分子／分母和 badcase；没达标的指标如实报告。
+**阶段验收：** `docs/project/evaluation.md` 列出可重放命令、数据 hash、分子／分母和 badcase；没达标的指标如实报告。
 
 ## Task 9：冻结评测、消融与性能报告（22h）
 
-**Files:** 新增 `eval/questions.jsonl`、`eval/scenarios.jsonl`、`eval/annotations.jsonl`、`scripts/evaluate.py`、`scripts/benchmark.py`、`tests/eval/test_evaluation.py`、`docs/evaluation.md`；更新 data-card。
+**Files:** 新增 `data/eval/questions.jsonl`、`data/eval/scenarios.jsonl`、`data/eval/annotations.jsonl`、`src/rf_copilot/evaluation/{dataset,metrics,cli,benchmark}.py`、`tests/evaluation/test_evaluation.py`、`docs/project/evaluation.md`；更新 data-card。
 
 **Interfaces:**
 
-- `evaluate.validate_dataset(path: Path) -> None`：每题 id/split/template_group/category/question/gold_chunk_ids/expected_behavior；检查分组隔离与规定计数。
-- `evaluate.recall_at_k(gold: list[set[str]], predicted: list[list[str]], k: int=5) -> float`：对有答案题计算每题证据召回比例再宏平均；无答案题单独处理。
-- CLI `evaluate.py --mode dense|bm25|hybrid|rerank --split dev|test --output PATH`；输出原始预测、引用、错误、版本和分子分母。annotation 保存 claim、是否被来源支持及标注说明，人工支持率=支持的事实数/所有可验证事实数。
+- `evaluation.dataset.validate_dataset(path: Path) -> None`：每题 id/split/template_group/category/question/gold_chunk_ids/expected_behavior；检查分组隔离与规定计数。
+- `evaluation.metrics.recall_at_k(gold: list[set[str]], predicted: list[list[str]], k: int=5) -> float`：对有答案题计算每题证据召回比例再宏平均；无答案题单独处理。
+- CLI `python -m rf_copilot.evaluation.cli --mode dense|bm25|hybrid|rerank --split dev|test --output PATH`；输出原始预测、引用、错误、版本和分子分母。annotation 保存 claim、是否被来源支持及标注说明，人工支持率=支持的事实数/所有可验证事实数。
 
 - [ ] **9.1 写评测器测试。** 固定小样本验证指标定义，template_group 出现在两个 split 应抛 ValueError；没有有效事实的回答不能自动得到 100% 支持率：
 
@@ -376,10 +463,10 @@ def test_recall_definition():
     assert recall_at_k([{'a','b'}, {'c'}], [['a'], ['c']]) == pytest.approx(0.75)
 ```
 
-- [ ] **9.2 执行红灯。** `python -m pytest tests/eval/test_evaluation.py -v`。
+- [ ] **9.2 执行红灯。** `python -m pytest tests/evaluation/test_evaluation.py -v`。
 - [ ] **9.3 冻结数据。** 60 题=30 dev+30 test；test=18 可答、6 条件缺失／版本冲突、6 无答案。20 个 Agent 场景含正常问答／实验／对比及非法参数、超时、API 故障、注入。先给 ground truth 再跑模型，冻结 hash；没有合法规范语料时可答题只涉及项目内容，并明确未覆盖规范问答。
 - [ ] **9.4 实现并运行消融。** 四配置使用同一 corpus/model revision/题集，参数只在 dev 调整；对 test 分别运行四次 CLI，人工复核事实与引用。目标 Recall@5≥0.85、支持率≥0.90、无答案正确拒答≥5/6、Agent 成功≥16/20。未达标列 badcase 和真实值，不修改 test 来抬分。
-- [ ] **9.5 实现并运行性能实验。** benchmark 参数 `--requests 50 --concurrency 1|4|8 --cache cold|warm`；每个组合固定 50 次，预先区分重复 key 与唯一 key 比例，冷缓存用独立测试命名空间。记录提交／查询 p50/p95、排队、计算、LLM、总耗时、命中率、失败数和机器配置。进行一次 Redis 停机／恢复、worker 中断／恢复，验证数据库终态。
+- [ ] **9.5 实现并运行性能实验。** `python -m rf_copilot.evaluation.benchmark` 参数 `--requests 50 --concurrency 1|4|8 --cache cold|warm`；每个组合固定 50 次，预先区分重复 key 与唯一 key 比例，冷缓存用独立测试命名空间。记录提交／查询 p50/p95、排队、计算、LLM、总耗时、命中率、失败数和机器配置。进行一次 Redis 停机／恢复、worker 中断／恢复，验证数据库终态。
 - [ ] **9.6 验证并提交。** 单元测试 PASS；evaluation.md 引用可重放命令、数据 hash、结果文件及分母；结论不超过数据支持范围。提交 `test: add frozen RF Copilot evaluations and benchmarks`。
 
 ---
@@ -392,7 +479,7 @@ def test_recall_definition():
 
 ## Task 10：可部署演示与面试交付（22h）
 
-**Files:** 完成 Dockerfile、compose.yaml、`.env.example`、README.md；新增 `demo/app.py`、`tests/delivery/test_smoke.py`、`docs/architecture.md`、`docs/interview.md`、`docs/job-tracker.csv`、`docs/resume-ai.md`、`docs/resume-backend.md`、`docs/demo-script.md`。
+**Files:** 完成 Dockerfile、compose.yaml、`.env.example`、README.md；新增 `demo/app.py`、`tests/delivery/test_smoke.py`、`docs/project/architecture.md`、`docs/career/interview.md`、`docs/career/job-tracker.csv`、`docs/career/resume-ai.md`、`docs/career/resume-backend.md`、`docs/career/demo-script.md`。
 
 **Interfaces:** Streamlit 只调用既有三个 API，提供问题输入、job 状态查询、两实验对比和报告展示；通过 `session_id` 连续会话。NPZ／图表需要时写 `artifacts/<job_id>/`，数据库只存相对路径+hash，路径由服务端生成。
 
@@ -434,30 +521,31 @@ async def test_mcp_exposes_exactly_four_tools(mcp_client):
 另外断言：对同一 fixture 语料，MCP 的 `search_knowledge` 与直接调用 `ToolRunner.call` 结果相同；第 7 次调用返回预算错误；非法 RB（rb_start=273）返回错误，并且数据库没有新 job；调用不存在的工具名返回错误。
 - [ ] **A.2 执行红灯。** `python -m pytest tests/mcp_server -v`；预期模块缺失。
 - [ ] **A.3 实现 server。** 按上面的接口实现，安装并锁定 `mcp` 版本。
-- [ ] **A.4 验证并提交。** 测试 PASS；用 MCP Inspector 或 Claude Desktop 配置 `python -m rf_copilot.mcp_server`，完成一次「search → submit → get」，截图放进 `docs/demo-script.md`。提交 `feat: expose RF Copilot tools over MCP`。
+- [ ] **A.4 验证并提交。** 测试 PASS；用 MCP Inspector 或 Claude Desktop 配置 `python -m rf_copilot.mcp_server`，完成一次「search → submit → get」，截图放进 `docs/career/demo-script.md`。提交 `feat: expose RF Copilot tools over MCP`。
 
 ## Task B（可选）：Celery 调度后端（6h）
 
 **目标：** 证明分发器边界设计得对：换成 Celery 只新增一个实现，服务层、仓储和测试契约都不改。面试时能讲清「为什么核心先不用 Celery」。
 
-**Files:** 新增 `src/rf_copilot/jobs/celery_app.py`、`tests/jobs/test_celery_dispatcher.py`；修改 settings、`compose.yaml`（`celery` profile）、`pyproject.toml`（`celery` 可选依赖组）。
+**Files:** 新增 `src/rf_copilot/jobs/dispatch/celery_dispatcher.py`、`tests/jobs/dispatch/test_celery.py`；修改 `config/settings.py`、`compose.yaml`（`celery` profile）、`pyproject.toml`（`celery` 可选依赖组）。
 
 **Interfaces:**
 
-- Consumes：任务 4 的 `worker.run_job(job_id, repo, cache, time_limit_s=120.0)` 与 `tests/jobs/dispatcher_contract.py`。
-- `celery_app.CeleryDispatcher.enqueue(job_id: UUID) -> None`：调用 `execute_job.delay(str(job_id))`。
-- `celery_app.execute_job(job_id: str) -> None`：Celery task，只调用 `run_job`。配置 JSON 序列化、`acks_late=True`、`worker_prefetch_multiplier=1`、不配 result backend；broker 使用同一 Redis 的 DB 1，与核心队列和缓存的 key 分开。
-- `settings.dispatcher == 'celery'` 时由服务工厂注入 `CeleryDispatcher`；默认仍为 `redis`。reconcile 在 celery 模式下只按 dispatch_pending 补投（Celery 队列不支持 `contains`）。
+- Consumes：任务 4 的 `worker.run_job(job_id, repo, cache, time_limit_s=120.0)` 与 `tests/jobs/dispatch/contract.py`。
+- `dispatch.celery_dispatcher.CeleryDispatcher.enqueue(job_id: UUID) -> None`：调用 `execute_job.delay(str(job_id))`。
+- `dispatch.celery_dispatcher.execute_job(job_id: str) -> None`：Celery task，只调用 `run_job`。配置 JSON 序列化、`acks_late=True`、`worker_prefetch_multiplier=1`、不配 result backend；broker 使用同一 Redis 的 DB 1，与核心队列和缓存的 key 分开。
+- `config.settings.dispatcher == 'celery'` 时由服务工厂注入 `CeleryDispatcher`；默认仍为 `redis`。reconcile 在 celery 模式下只按 dispatch_pending 补投（Celery 队列不支持 `contains`）。
 
-- [ ] **B.1 写测试。** `test_celery_dispatcher.py` 以 `dispatcher='celery'` 参数化运行 `dispatcher_contract.py` 的全部用例，必须使用 Compose 中真实运行的 Celery worker，不使用 eager 模式。
-- [ ] **B.2 执行红灯。** `docker compose --profile celery up -d`；`python -m pytest tests/jobs/test_celery_dispatcher.py -v -m integration`；预期 `celery_app` 缺失。
+- [ ] **B.1 写测试。** `tests/jobs/dispatch/test_celery.py` 以 `dispatcher='celery'` 参数化运行 `tests/jobs/dispatch/contract.py` 的全部用例，必须使用 Compose 中真实运行的 Celery worker，不使用 eager 模式。
+- [ ] **B.2 执行红灯。** `docker compose --profile celery up -d`；`python -m pytest tests/jobs/dispatch/test_celery.py -v -m integration`；预期 `jobs/dispatch/celery_dispatcher.py` 缺失。
 - [ ] **B.3 实现分发器与 task。** 按上面的接口实现，安装并锁定 Celery 版本。
-- [ ] **B.4 验证并提交。** 契约测试在 `redis` 和 `celery` 两种模式下都 PASS；在 `docs/architecture.md` 补充两种分发器的取舍（依赖、运维成本、Windows 支持、可观测性）。提交 `feat: add optional Celery dispatcher behind the queue contract`。
+- [ ] **B.4 验证并提交。** 契约测试在 `redis` 和 `celery` 两种模式下都 PASS；在 `docs/project/architecture.md` 补充两种分发器的取舍（依赖、运维成本、Windows 支持、可观测性）。提交 `feat: add optional Celery dispatcher behind the queue contract`。
 
 ## 自审与完成判断
 
 - 设计覆盖：数值口径→1/2；任务可靠性→3/4；语料来源与版本→5/6；引用／费用→7；四工具／预算→8；冻结评测→9；部署／简历／演示→10。MCP→可选 A；Celery→可选 B（设计中 Celery 是主线，本版明确降为可选，见「本版修订」）。
-- 阶段一致：阶段工时 22+33+43+12+22+22=154h，与原任务工时一致；可选 A+B=14h，不超过 28h 机动时间。
+- 阶段一致：阶段工时 26+33+43+12+22+22=158h（任务 0 的 4h 来自机动时间）；可选 A+B=14h，不超过剩余的 24h 机动时间。
+- 现有代码：根目录 14 个 `.py`、`PAmodel/` 8 个、`plotfigure/` 5 个，共 27 个文件，全部出现在任务 0 的对照表中；任务 1、2 引用的旧文件路径都已改为新位置。
 - 接口一致：SimConfig → ExperimentRequest → JobView → AgentResponse；未知参考功率始终 null；job 终态与单项 Metric 状态分别建模。
 - Review Focus 五项均已指向具体测试；真实数据库、真实 worker 和真实模型评测不以 mock 结果代替。
 - 第三方库 API、模型 revision、实际硬件速度在实施时验证锁定；当前没有实测成绩，没有依赖安装，没有代码变更。
@@ -465,8 +553,8 @@ async def test_mcp_exposes_exactly_four_tools(mcp_client):
 
 ## 执行交接
 
-用户当前授权的是设计与计划文档，未要求立即实现全部功能。建议把这份文档作为个人学习清单，任务完成后逐项勾选。
+**执行方式：Native**（用户 2026-10-29 选定）：由同一会话按任务 0 → 10 顺序实现，全部完成后由一位独立审阅者检查整个分支。使用 superpowers:executing-plans。
 
-如由编码代理实施，建议 Native：模块接口顺序依赖明显、项目规模受限，由同一代理逐项实现便于保持上下文并控制开销。也可选 Subagent-driven，为每个任务安排独立实现与审阅；两者均须保留用户亲自理解代码、复现实验与面试讲解的环节。
+**当前状态：只有计划，尚未开始实施。** 收到用户明确的开始指令后，从任务 0 的 0.1 开始；每完成一个阶段先停下来，让用户确认阶段验收结果，再进入下一阶段。
 
-按照 writing-plans 的交接要求，开始实现前先审阅本计划并选择执行方式；这不影响本次文档交付完成。
+无论由谁实现，都要保留用户亲自理解代码、复现实验和练习面试讲解的环节：每个阶段结束时，用户应能不看代码讲清这一阶段做了什么、为什么这样做。

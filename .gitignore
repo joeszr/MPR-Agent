@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# IDE
+.idea/
+
+# 密钥与环境
+.env
+
+# 运行结果（旧主程序与绘图脚本写到 outputs/）
+outputs/
+*.npz
+*.mat
