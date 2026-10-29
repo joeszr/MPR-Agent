@@ -18,8 +18,8 @@ import numpy as np
 
 from matlab_builtins import round_
 
-from check_region_avg_left import check_region_avg_left
-from check_region_avg_right import check_region_avg_right
+from .check_region_avg_left import check_region_avg_left
+from .check_region_avg_right import check_region_avg_right
 
 
 def check_SEM_FR1(psd1, CBW, FFT_factor, bins_per_1MHz):

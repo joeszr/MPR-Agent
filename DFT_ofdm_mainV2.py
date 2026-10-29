@@ -4,8 +4,11 @@
 子程序：apply_pa_model, check_EVM_DFT, check_ACLR, check_SEM_FR1, check_SEM_FR2,
         check_IBE, check_region_avg_left, check_region_avg_right
 
-运行：
+运行（在项目根目录下）：
     python DFT_ofdm_mainV2.py
+
+目录结构：功放模型在 PAmodel/，指标检测在 Checks/，绘图脚本在 plots/。本脚本用包
+导入引用它们，所以在项目根目录下运行即可（脚本所在目录会自动进入 sys.path）。
 
 与 CP-OFDM 版的区别（与 .m 一致）：
   * 子载波映射前多一次 DFT 预编码，EVM 判决里对应多做一步 IDFT；
@@ -25,12 +28,12 @@ import time
 
 import numpy as np
 
-from apply_pa_model import apply_pa_model
-from check_ACLR import check_ACLR
-from check_EVM_DFT import check_EVM_DFT
-from check_IBE import check_IBE
-from check_SEM_FR1 import check_SEM_FR1
-from check_SEM_FR2 import check_SEM_FR2
+from Checks.check_ACLR import check_ACLR
+from Checks.check_EVM_DFT import check_EVM_DFT
+from Checks.check_IBE import check_IBE
+from Checks.check_SEM_FR1 import check_SEM_FR1
+from Checks.check_SEM_FR2 import check_SEM_FR2
+from PAmodel.apply_pa_model import apply_pa_model
 from matlab_builtins import factor, fftshift, hann, ifftshift, pwelch, qammod
 
 # ====================== 参数配置 ======================

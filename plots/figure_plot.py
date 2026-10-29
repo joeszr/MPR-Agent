@@ -5,8 +5,8 @@ MATLAB 版本从工作区变量 ``mr_data`` 取数据（每行一个 RB 配置�
 
 Python 版本从结果文件读同一个向量：
 
-    python figure_plot.py 1022-1533-100MHZ-256QAM.npz
-    python figure_plot.py 1022-1533-100MHZ-256QAM.npz --rated-power 26
+    python plots/figure_plot.py 1022-1533-100MHZ-256QAM.npz
+    python plots/figure_plot.py 1022-1533-100MHZ-256QAM.npz --rated-power 26
 
 主程序存的是"最大输出功率"(dBm)；给 --rated-power 26 就按 MPR = max(0, 26 - P)
 换算（工程说明文档 8.2 节说这一步原来要手工做）。

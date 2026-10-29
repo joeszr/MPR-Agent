@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from HZW_HB_am import HZW_HB_am
-from HZW_HB_pm import HZW_HB_pm
-from pa_model_memory_38803 import pa_model_memory_38803
-from pa_model_memoryless import pa_model_memoryless
-from pa_model_mp import pa_model_mp
-from pa_model_mp_K7 import pa_model_mp_K7
+from .HZW_HB_am import HZW_HB_am
+from .HZW_HB_pm import HZW_HB_pm
+from .pa_model_memory_38803 import pa_model_memory_38803
+from .pa_model_memoryless import pa_model_memoryless
+from .pa_model_mp import pa_model_mp
+from .pa_model_mp_K7 import pa_model_mp_K7
 
 _MISSING = {
     "AMPM": "AM.m / PM.m",

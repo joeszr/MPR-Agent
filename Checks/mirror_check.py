@@ -10,13 +10,25 @@
 如果 "memless" 的镜像对完全一致、"full" 的镜像对有差异，说明 MPR 图的左右不对称
 来自功放记忆效应（物理原因），不是测量链路的 bug。
 
-用法：
-    python mirror_check.py
+这是可直接运行的诊断脚本（不是被主程序调用的检测函数），默认跑到全部镜像对结束。
+
+用法（在项目根目录下）：
+    python Checks/mirror_check.py
+
+也可以当作模块跑：
+    python -m Checks.mirror_check
 """
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from types import SimpleNamespace
+
+# 允许从 Checks/ 目录直接运行：把项目根目录加入 sys.path
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import numpy as np
 

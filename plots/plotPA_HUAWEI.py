@@ -4,16 +4,22 @@
 （原 .m 的注释也是这么说的）。
 
 用法：
-    python plotPA_HUAWEI.py           # 出图（没装 matplotlib 则只写 CSV）
+    python plots/plotPA_HUAWEI.py      # 出图（没装 matplotlib 则只写 CSV）
 """
 
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# 允许从 plots/ 目录直接运行：把项目根目录加入 sys.path
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import numpy as np
 
-from pa_GaAs_2GHz import pa_GaAs_2GHz
+from PAmodel.pa_GaAs_2GHz import pa_GaAs_2GHz
 
 
 def compute():

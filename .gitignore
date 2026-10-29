@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 *.egg-info/
+.pytest_cache/
 
 # IDE
 .idea/
@@ -10,7 +11,10 @@ __pycache__/
 # 密钥与环境
 .env
 
-# 运行结果（旧主程序与绘图脚本写到 outputs/）
+# 运行结果
 outputs/
 *.npz
 *.mat
+
+# 只留在本地、不上传 GitHub 的文档（计划、设计、简历等）
+docs/

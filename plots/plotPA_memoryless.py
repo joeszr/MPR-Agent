@@ -3,16 +3,22 @@
 用单频复信号驱动 pa_model_memoryless_38803，画增益和相位随输入功率的变化。
 
 用法：
-    python plotPA_memoryless.py       # 出图（没装 matplotlib 则只写 CSV）
+    python plots/plotPA_memoryless.py  # 出图（没装 matplotlib 则只写 CSV）
 """
 
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# 允许从 plots/ 目录直接运行：把项目根目录加入 sys.path
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import numpy as np
 
-from pa_model_memoryless_38803 import pa_model_memoryless
+from PAmodel.pa_model_memoryless_38803 import pa_model_memoryless
 
 
 def compute():

@@ -4,8 +4,11 @@
 子程序：apply_pa_model, check_EVM_CP, check_ACLR, check_SEM_FR1, check_SEM_FR2,
         check_region_avg_left, check_region_avg_right
 
-运行：
+运行（在项目根目录下）：
     python CP_ofdm_mainV6.py
+
+目录结构：功放模型在 PAmodel/，指标检测在 Checks/，绘图脚本在 plots/。本脚本用包
+导入引用它们，所以在项目根目录下运行即可（脚本所在目录会自动进入 sys.path）。
 
 参数就在下面"参数配置"一节，和 .m 文件头部一一对应，直接改数值即可。
 默认是全量扫描（37401 个 RB 配置 × 30 次蒙特卡洛），单进程约 21 小时；
@@ -18,11 +21,11 @@ import time
 
 import numpy as np
 
-from apply_pa_model import apply_pa_model
-from check_ACLR import check_ACLR
-from check_EVM_CP import check_EVM_CP
-from check_SEM_FR1 import check_SEM_FR1
-from check_SEM_FR2 import check_SEM_FR2
+from Checks.check_ACLR import check_ACLR
+from Checks.check_EVM_CP import check_EVM_CP
+from Checks.check_SEM_FR1 import check_SEM_FR1
+from Checks.check_SEM_FR2 import check_SEM_FR2
+from PAmodel.apply_pa_model import apply_pa_model
 from matlab_builtins import fftshift, ifftshift, qammod
 
 # ====================== 参数配置 ======================

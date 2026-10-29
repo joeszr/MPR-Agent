@@ -6,12 +6,18 @@
   NOTE 3: 输入在 5 dBm（50 欧 0.39764 V 峰值）处截幅，最小有效输入 -30 dBm。
 
 用法：
-    python plotPA_mp_K7.py            # 出图（没装 matplotlib 则只写 CSV）
+    python plots/plotPA_mp_K7.py       # 出图（没装 matplotlib 则只写 CSV）
 """
 
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# 允许从 plots/ 目录直接运行：把项目根目录加入 sys.path
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import numpy as np
 

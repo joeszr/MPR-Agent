@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-copilot"
+version = "0.1.0"
+description = "RF Copilot：基于 RAG 与工具调用的无线射频仿真诊断平台"
+requires-python = ">=3.11"
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+plots = ["matplotlib"]
+dev = ["pytest"]
+
+[tool.setuptools]
+# 根目录的三个模块
+py-modules = ["matlab_builtins", "CP_ofdm_mainV6", "DFT_ofdm_mainV2"]
+
+[tool.setuptools.packages.find]
+# 现有三个包 + 以后新增的 rf_copilot/ 包（不存在时自动忽略）
+where = ["."]
+include = ["PAmodel*", "Checks*", "plots*", "rf_copilot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
